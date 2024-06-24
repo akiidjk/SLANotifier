@@ -1,7 +1,10 @@
 """Class for print the log."""
 import logging
+
 from colorama import Fore, Style, init
-from main import LOGGING_LEVEL
+
+from lib.utils import get_config
+
 
 # ---- This file make the preset for Log ----
 
@@ -55,10 +58,11 @@ init(autoreset=True)
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 
-# Set the logging level
-level_num = logging.getLevelName(LOGGING_LEVEL)
-logging.getLogger().setLevel(level_num)
+logging_level, _, _, _, _ = get_config()
 
+# Set the logging level
+level_num = logging.getLevelName(logging_level)
+logging.getLogger().setLevel(level_num)
 
 handler = logging.StreamHandler()
 handler.setFormatter(CustomFormatter())
