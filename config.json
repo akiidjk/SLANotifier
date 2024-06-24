@@ -1,0 +1,7 @@
+{
+  "logging_level": "INFO",
+  "services": {},
+  "targets": [],
+  "reload": 120,
+  "save": true
+}
