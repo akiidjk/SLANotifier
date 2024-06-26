@@ -1,44 +1,95 @@
 import random
 from datetime import datetime, timedelta
-
-from faker import Faker
+from decimal import Decimal, ROUND_HALF_UP
 
 from lib.db_manager import DBManager
 from lib.logger import logging
+from lib.statistic_manager import StatisticManager
+
+teams_name = ["Unica", "Uniba", "Unige", "Unisa", "Unipi"]
+services_name = ['Slack', 'Twitter', 'Facebook', 'Instagram', 'Reddit', 'Youtube']
+
+score_tracker = [10_000 * len(services_name)] * len(teams_name)
+sla_tracker = [[100] * len(services_name)] * len(teams_name)
+flag_lost_tracker = [[0] * len(services_name)] * len(teams_name)
+flag_submitted_tracker = [[0] * len(services_name)] * len(teams_name)
 
 
-def generate_fake_data(num_teams, num_records_per_team):
-    fake = Faker()
+def divide_score_randomly(total, num_parts):
+    if num_parts <= 0:
+        raise ValueError("Number of parts must be greater than zero")
+    if total <= 0:
+        return [0] * num_parts
+    if num_parts > total:
+        raise ValueError("Number of parts must be less than or equal to the total")
+
+    parts = sorted(random.sample(range(1, total), num_parts - 1))
+    parts = [0] + parts + [total]
+    return [parts[i + 1] - parts[i] for i in range(num_parts)]
+
+
+def generate_realistic_score(start_value, num_records, max_change, max_value=None, decimal=False):
+    if decimal:
+        scores = [Decimal(start_value)]
+    else:
+        scores = [start_value]
+    for _ in range(1, num_records):
+        if decimal:
+            change = Decimal(random.uniform(-max_change, max_change)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            new_value = max(Decimal('0.00'), scores[-1] + change)
+        else:
+            change = random.randint(-max_change, max_change)
+            new_value = max(0, scores[-1] + change)
+
+        if max_value:
+            if decimal:
+                new_value = min(Decimal(max_value), new_value)
+            else:
+                new_value = min(max_value, new_value)
+
+        scores.append(new_value)
+
+    return scores
+
+
+def generate_fake_data(num_teams, num_records_per_team, timestamp):
     records = []
-
-    for _ in range(num_teams):
-        team_name = fake.company()
-        score_team = random.randint(50, 100_000)
+    for index in range(num_teams):
         team_record = {
-            'name_team': team_name,
-            'score_team': score_team,
+            'name_team': teams_name[index],
+            'score_team': score_tracker[index],
             'stats_service': []
         }
+        scores = generate_realistic_score(score_tracker[index], num_records_per_team, max_change=5000)
+        score_tracker[index] = scores[-1]
+        service_scores = divide_score_randomly(score_tracker[index], len(services_name))
 
-        for _ in range(num_records_per_team):
-            service_name = fake.bs()
-            score_service = random.randint(0, 10_000)
-            flag_submitted = random.randint(0, 200_000)
-            flags_lost = random.randint(0, 100_000)
-            status = str(random.randint(0, 100)) + '%'
-            is_down = random.randint(0, 1)
-            timestamp = (datetime.now() - timedelta(days=random.randint(0, 30))).isoformat()
+        for i in range(num_records_per_team):
+            for j, service_name in enumerate(services_name):
+                score_service = service_scores[j]
+                is_down = random.randint(0, 1)
 
-            service_record = {
-                'name_service': service_name,
-                'score_service': score_service,
-                'flag_submitted': flag_submitted,
-                'flags_lost': flags_lost,
-                'sla_value': status,
-                'is_down': is_down,
-                'timestamp': timestamp
-            }
-            team_record['stats_service'].append(service_record)
+                sla = generate_realistic_score(sla_tracker[index][j], num_records_per_team, max_change=0.30,
+                                               max_value=100.00, decimal=True)
+                sla_tracker[index][j] = sla[-1]
+
+                flag_lost_tracker[index][j] = flag_lost_tracker[index][j] + random.randint(0, 100)
+                flag_submitted_tracker[index][j] = flag_submitted_tracker[index][j] + random.randint(0, 100)
+
+                service_record = {
+                    'name_service': service_name,
+                    'score_service': score_service,
+                    'flags_submitted': flag_submitted_tracker[index][j],
+                    'flags_lost': flag_lost_tracker[index][j],
+                    'sla_value': float(sla_tracker[index][j]),
+                    'is_down': is_down,
+                    'timestamp': timestamp
+                }
+
+                team_record['stats_service'].append(service_record)
+
+            # Update team score for this record
+            team_record['score_team'] = scores[i]
 
         records.append(team_record)
 
@@ -47,19 +98,30 @@ def generate_fake_data(num_teams, num_records_per_team):
 
 class Test:
     def __init__(self):
+        self.db = DBManager()
+        self.manager = StatisticManager(teams_name, services_name, 0)
         pass
+
+    def generate_data(self, num_teams=10, num_records_per_team=10, ticks=1000):
+        logging.info(f'Params: {num_teams = }, {num_records_per_team = }, {ticks = }')
+        logging.info("Generating fake data")
+        base_date = datetime(2024, 6, 26)
+        for tick in range(ticks):
+            logging.debug(f'Cycle {tick + 1} of {ticks}')
+            fake_records = generate_fake_data(num_teams, num_records_per_team,
+                                              timestamp=(base_date + timedelta(minutes=2 * (tick + 1))).isoformat())
+            self.db.insert_records(fake_records)
 
     def run(self):
         logging.info(f'Running test')
-        db = DBManager()
-        num_teams = 5
-        num_records_per_team = 10
-        ticks = 1000
-        logging.info(f'Params: {num_teams = }, {num_records_per_team = }, {ticks = }')
-        for tick in range(ticks):
-            logging.info(f'Cycle {tick + 1} of {ticks}')
-            fake_records = generate_fake_data(num_teams, num_records_per_team)
-            db.insert_records(fake_records)
+
+        # self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
+        self.manager.generate_statistic()
+        self.manager.generate_report()
+
+        # self.manager.gen_teams_score_plot(team_name=teams_name[0])
+
+        # self.db.remove_db()
         logging.info(f'Test ended')
 
 
