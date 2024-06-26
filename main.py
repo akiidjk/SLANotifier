@@ -9,6 +9,7 @@ from selenium import webdriver
 
 from lib.db_manager import DBManager
 from lib.logger import logging
+from lib.statistic_manager import StatisticManager
 from lib.utils import get_config
 
 BASE_URL = "http://10.10.0.1/scoreboard"
@@ -70,6 +71,10 @@ class SLANotifier:
                 "score": scores,
                 "stats_service": stats_info
             })
+
+        if self.save:
+            logging.info("Saving data on database")
+            self.dbmanager.insert_records(teams_data)
 
         return teams_data
 
@@ -175,6 +180,7 @@ if __name__ == '__main__':
     if save:
         # ! Operazioni sul DB e generazioni grafico
         logging.info("Generating plot")
+        StatisticManager(targets, services)
         pass
 
 # * @akiidjk
