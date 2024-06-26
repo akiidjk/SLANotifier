@@ -1,6 +1,8 @@
 import sqlite3
+from typing import Any
 
 from lib.logger import logging
+from lib.utils import deserialize, serialize
 
 
 class DBManager:
@@ -21,9 +23,9 @@ class DBManager:
                         score_team INTEGER,
                         name_service VARCHAR(255),
                         score_service INTEGER,
-                        flag_submitted INTEGER,
+                        flags_submitted INTEGER,
                         flags_lost INTEGER,
-                        sla_value VARCHAR(255),
+                        sla_value FLOAT,
                         is_down BOOLEAN,
                         timestamp TIMESTAMPTZ NOT NULL
                     )
@@ -33,46 +35,93 @@ class DBManager:
         except sqlite3.OperationalError:
             return False
 
-    def format_record(self, records):
-        formatted_records = []
-        for record in records:
-            for service in record['stats_service']:
-                formatted_record = (
-                    record['name_team'],
-                    record['score_team'],
-                    service['name_service'],
-                    service['score_service'],
-                    service['flag_submitted'],
-                    service['flags_lost'],
-                    service['sla_value'],
-                    service['is_down'],
-                    service['timestamp']
-                )
-                formatted_records.append(formatted_record)
+    @staticmethod
+    def check_result(results):
+        if len(results) == 0:
+            return False
+        return True
 
-        return formatted_records
-
-    def insert_records(self, records):
-        records = self.format_record(records)
-        logging.debug(records)
+    def insert_records(self, records: list) -> None:
+        records = serialize(records)
+        # logging.debug(records)
         with sqlite3.connect(self.name_db) as conn:
             c = conn.cursor()
             c.executemany('''
-                INSERT INTO table_records (name_team, score_team, name_service, score_service, flag_submitted, flags_lost, sla_value, is_down, timestamp)
+                INSERT INTO table_records (name_team, score_team, name_service, score_service, flags_submitted, flags_lost, sla_value, is_down, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', records)
             conn.commit()
 
-    def remove_db(self):
+    def remove_db(self) -> None:
         with sqlite3.connect(self.name_db) as conn:
             c = conn.cursor()
-            c.execute('''DROP TABLE table_records''')
+            c.execute('''DROP TABLE table_records ''')
 
-    def fetch_by_team(self, team: str):
-        pass
+    @staticmethod
+    def check_timestamp_columns(columns: tuple) -> None:
+        if "timestamp" in columns:
+            logging.error("You cannot specify a timestamp column")
+            exit(1)
 
-    def fetch_by_service(self, service: str):
-        pass
+    def fetch_by_team(self, team: str, columns: tuple) -> list[dict[str, Any]]:
+        try:
+            with sqlite3.connect(self.name_db) as conn:
+                c = conn.cursor()
+                self.check_timestamp_columns(columns)
+                logging.debug(columns)
+                columns_str = ', '.join(columns) + ", timestamp"
+                logging.debug(columns_str)
+                query = f'''
+                    SELECT {columns_str}
+                    FROM table_records
+                    WHERE name_team = ?
+                    ORDER BY timestamp
+                '''
+                logging.debug(query)
+                c.execute(query, (team,))
+                results = deserialize(columns, c.fetchall())
+        except sqlite3.OperationalError as error:
+            logging.error(f"Error with fetching records {error}")
+            exit(1)
+        return results
 
-    def fetch_by_team_service(self, team, service: str):
-        pass
+    def fetch_by_service(self, service: str, columns: tuple) -> list[dict[str, Any]]:
+        try:
+            with sqlite3.connect(self.name_db) as conn:
+                c = conn.cursor()
+                self.check_timestamp_columns(columns)
+                columns_str = ', '.join(columns) + ", timestamp"
+                c.execute(f'''
+                    SELECT {columns_str}
+                    FROM table_records
+                    WHERE name_service = ?
+                    ORDER BY timestamp
+                ''', (service,))
+                results = deserialize(columns, c.fetchall())
+        except sqlite3.OperationalError as error:
+            logging.error(f"Error with fetching records {error}")
+            exit(1)
+
+        return results
+
+    def fetch_by_team_service(self, team: str, service: str, columns: tuple) -> list[dict[str, Any]]:
+        try:
+            with sqlite3.connect(self.name_db) as conn:
+                c = conn.cursor()
+                self.check_timestamp_columns(columns)
+                columns_str = ', '.join(columns) + ", timestamp"
+                c.execute(f'''
+                            SELECT {columns_str}
+                            FROM table_records
+                            WHERE name_service = ? AND name_team = ?
+                            ORDER BY timestamp
+                        ''', (service, team,))
+                results = deserialize(columns, c.fetchall())
+        except sqlite3.OperationalError as error:
+            logging.error(f"Error with fetching records {error}")
+            exit(1)
+
+        if self.check_result(results):
+            return results
+        else:
+            logging.error("Error with fetching records or db is empty")
