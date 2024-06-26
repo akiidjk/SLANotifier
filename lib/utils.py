@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 
 def get_config():
@@ -9,6 +10,30 @@ def get_config():
     services = config['services']
     targets = config['targets']
     reload = config['reload']
-    save = config['save']
+    save = config['report']
 
     return logging_level, services, targets, reload, save
+
+
+def serialize(records: list) -> list[tuple]:
+    serialized_records = []
+    for record in records:
+        for service in record['stats_service']:
+            formatted_record = (
+                record['name_team'],
+                record['score_team'],
+                service['name_service'],
+                service['score_service'],
+                service['flags_submitted'],
+                service['flags_lost'],
+                service['sla_value'],
+                service['is_down'],
+                service['timestamp']
+            )
+            serialized_records.append(formatted_record)
+
+    return serialized_records
+
+
+def deserialize(columns, records: list) -> list[dict[Any, Any]]:
+    return [dict(zip(columns + ("timestamp",), row)) for row in records]
