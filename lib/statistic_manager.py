@@ -131,7 +131,8 @@ class StatisticManager:
 
 """)
 
-        logging.info("Report generated")
+        logging.info(
+            f"Report generated and save in {os.path.abspath(os.path.join(self.base_path, "reports", self.file_report.name))}")
 
     # * ------------------ Utils function  ------------------
 
