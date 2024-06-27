@@ -80,6 +80,8 @@ class StatisticManager:
 
 - **Max total score:** {self.max_score[team]}
 - **Min total score:** {self.min_score[team]}
+- **Total Flags submitted**: {sum(self.total_flags_submitted[team].values())}
+- **Total Flags lost**: {sum(self.total_flags_lost[team].values())}
 - **Flags submitted:** {self.format_results(self.total_flags_submitted, team)}
 - **Flag lost:** {self.format_results(self.total_flags_lost, team)}
 - **Min sla:** {self.format_results(self.min_sla, team)}
