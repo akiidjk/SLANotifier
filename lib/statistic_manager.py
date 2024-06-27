@@ -6,17 +6,19 @@ import matplotlib.dates as mdates
 import mpld3
 import pandas as pd
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 from mpld3 import plugins
+from pandas import DataFrame
 
 from lib.db_manager import DBManager
 
 
 class StatisticManager:
-    def __init__(self, teams_name: list, services_name: list, number_down: int):
+    def __init__(self, teams_name: list, services_name: list, downtime_count: int):
         self.db = DBManager()
         self.teams = teams_name
         self.services = services_name
-
+        self.downtime_count = downtime_count
         self.base_path = os.path.abspath(os.getcwd())
 
         self.init_directory()
@@ -30,22 +32,23 @@ class StatisticManager:
         self.min_score_service = {team: {} for team in teams_name}
         self.min_sla = {team: {} for team in teams_name}
 
+    # * ------------------ Init functions  ------------------
+
     def init_directory(self):
-        dirs = [".reports", "plots_image", "plots_interactive"]
-        dirs.sort()
+        dirs = ["plots_image", "plots_interactive"]
+
+        path_report = os.path.join(self.base_path, "reports")
+        os.mkdir(path_report) if not os.path.exists(path_report) else None
 
         for directory in dirs:
-            directory = directory.replace(".", "")
-            if directory != "reports":
-                path = os.path.join(self.base_path, "reports", directory)
-            else:
-                path = os.path.join(self.base_path, directory)
+            path = os.path.join(self.base_path, "reports", directory)
             if not os.path.exists(path):
                 os.mkdir(path)
 
     def init_file_report(self):
-        path_report = os.path.join(self.base_path, "reports", f"report-{datetime.now().strftime("%d-%m-%y_%H-%M")}.md")
-        file_report = open(path_report, "w")
+        path_file_report = os.path.join(self.base_path, "reports",
+                                        f"report-{datetime.now().strftime("%d-%m-%y_%H-%M")}.md")
+        file_report = open(path_file_report, "w")
         file_report.write(f"""
 # Report statistic A/D {datetime.now().strftime("%d-%m-%y|%H:%M")}
         
@@ -54,9 +57,11 @@ class StatisticManager:
 
         return file_report
 
+    # * ------------------ Main functions  ------------------
+
     def generate_statistic(self):
         logging.info("Generating Statistic")
-        for index, team in enumerate(self.teams):
+        for team in self.teams:
             self.gen_teams_score_plot(team)
             self.gen_teams_services_score_plot(team)
             self.gen_sla_service_score_plot(team)
@@ -64,12 +69,8 @@ class StatisticManager:
             self.gen_flags_lost_service_score(team)
         logging.info(f"Statistic Generated")
 
-    @staticmethod
-    def format_results(results: dict, team: str):
-        formatted_result = "\n\t- ".join([key + ": " + str(results[team][key]) + ", " for key in results[team].keys()])
-        return formatted_result
-
-    def generate_report(self):
+    def generate_report(self) -> None:
+        logging.info("Generating report")
         for team in self.teams:
             self.file_report.write(f"""
 ## Team: {team}
@@ -79,11 +80,12 @@ class StatisticManager:
 
 - **Max total score:** {self.max_score[team]}
 - **Min total score:** {self.min_score[team]}
-- **Flags submitted:** \n\t- {self.format_results(self.total_flags_submitted, team)}
-- **Flag lost:** \n\t- {self.format_results(self.total_flags_lost, team)}
-- **Min sla:** \n\t- {self.format_results(self.min_sla, team)}
-- **Max score for service:** \n\t- {self.format_results(self.max_score_service, team)}
-- **Min score:** \n\t- {self.format_results(self.min_score_service, team)}
+- **Flags submitted:** {self.format_results(self.total_flags_submitted, team)}
+- **Flag lost:** {self.format_results(self.total_flags_lost, team)}
+- **Min sla:** {self.format_results(self.min_sla, team)}
+- **Max score for service:** {self.format_results(self.max_score_service, team)}
+- **Min score:** {self.format_results(self.min_score_service, team)}
+- **Numbers of downtime:** {self.downtime_count}
 
 ### Score Team
 
@@ -109,7 +111,7 @@ class StatisticManager:
 
 ---
 
-### Flag lost Service
+### Flag lost
 
 ![plot_sla]({os.path.join("/", "reports", "plots_image", f"plot-{team}-flags_lost.png")})
 
@@ -117,7 +119,7 @@ class StatisticManager:
 
 ---
 
-### Sla Service
+### Flag submitted 
 
 ![plot_sla]({os.path.join("/", "reports", "plots_image", f"plot-{team}-flags_submitted.png")})
 
@@ -127,9 +129,17 @@ class StatisticManager:
 
 """)
 
-    # * ----------------------------------------------------- ___________ -----------------------------------------------------
+        logging.info("Report generated")
 
-    def fetch_service_data(self, team_name: str, columns: tuple):
+    # * ------------------ Utils function  ------------------
+
+    @staticmethod
+    def format_results(results: dict, team: str):
+        formatted_result = " ".join(
+            ["\n\t- " + key + ": " + str(results[team][key]) + ", " for key in results[team].keys()])
+        return formatted_result
+
+    def fetch_service_data(self, team_name: str, columns: tuple) -> dict[str, DataFrame]:
         service_data = {}
 
         for service_name in self.services:
@@ -142,7 +152,7 @@ class StatisticManager:
         return service_data
 
     @staticmethod
-    def format_label(title):
+    def format_label(title: str) -> None:
 
         plt.xlabel('Time')
         plt.ylabel('Score')
@@ -154,7 +164,7 @@ class StatisticManager:
         plt.gca().xaxis.set_major_locator(mdates.HourLocator(interval=1))
         plt.gcf().autofmt_xdate()
 
-    def save_plot(self, fig, team_name, spec: str):
+    def save_plot(self, fig, team_name: str, spec: str) -> None:
         html_str = mpld3.fig_to_html(fig)
 
         path_image = os.path.join(self.base_path, "reports", "plots_image", f"plot-{team_name}-{spec}.png")
@@ -166,60 +176,67 @@ class StatisticManager:
         plt.savefig(path_image)
         plt.close()
 
-    def gen_teams_services_score_plot(self, team_name):
+    # * ------------------ Generation of statistic  ------------------
+
+    def gen_teams_services_score_plot(self, team_name: str) -> None:
         service_data = self.fetch_service_data(team_name, columns=("score_service",))
 
         for service in service_data:
             self.max_score_service[team_name][service] = int(service_data[service]['score_service'].max())
             self.min_score_service[team_name][service] = int(service_data[service]['score_service'].min())
 
-        fig = self.create_plot_service_data(team_name=team_name, service_data=service_data, columns="score_service")
+        fig = self.create_plot_service_data(title=f"Services score: {team_name}", service_data=service_data,
+                                            columns="score_service")
         self.save_plot(fig, team_name, "team_services_score")
 
-    def gen_sla_service_score_plot(self, team_name: str):
+    def gen_sla_service_score_plot(self, team_name: str) -> None:
         service_data = self.fetch_service_data(team_name=team_name, columns=("sla_value",))
 
         for service in service_data:
             self.min_sla[team_name][service] = int(service_data[service]['sla_value'].min())
 
-        fig = self.create_plot_service_data(team_name=team_name, service_data=service_data, columns="sla_value")
+        fig = self.create_plot_service_data(title=f"Sla value: {team_name}", service_data=service_data,
+                                            columns="sla_value")
         self.save_plot(fig, team_name, "sla")
 
-    def gen_teams_score_plot(self, team_name):
+    def gen_teams_score_plot(self, team_name: str) -> None:
         data = self.db.fetch_by_team(team=team_name, columns=("score_team",))
 
         logging.debug(f"Data fetched: {len(data)}")
 
-        df = pd.DataFrame(data)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        data_frame = pd.DataFrame(data)
+        data_frame['timestamp'] = pd.to_datetime(data_frame['timestamp'])
 
-        self.max_score[team_name] = int(df['score_team'].max())
-        self.min_score[team_name] = int(df['score_team'].min())
+        self.max_score[team_name] = int(data_frame['score_team'].max())
+        self.min_score[team_name] = int(data_frame['score_team'].min())
 
-        fig = self.create_plot_score_team(df, team_name)
+        fig = self.create_plot_score_team(data_frame, team_name)
         self.save_plot(fig, team_name, "team_score")
 
         plt.close()
 
-    def gen_flags_lost_service_score(self, team_name):
+    def gen_flags_lost_service_score(self, team_name: str) -> None:
         service_data = self.fetch_service_data(team_name=team_name, columns=("flags_lost",))
 
         for service in self.services:
             self.total_flags_lost[team_name][service] = int(service_data[service]['flags_lost'].iloc[-1])
 
-        fig = self.create_plot_service_data(team_name=team_name, service_data=service_data, columns="flags_lost")
+        fig = self.create_plot_service_data(title=f"Flags lost: {team_name}", service_data=service_data,
+                                            columns="flags_lost")
         self.save_plot(fig, team_name, "flags_lost")
 
-    def gen_flags_submitted_service_score(self, team_name):
+    def gen_flags_submitted_service_score(self, team_name: str) -> None:
         service_data = self.fetch_service_data(team_name=team_name, columns=("flags_submitted",))
 
         for service in self.services:
             self.total_flags_submitted[team_name][service] = int(service_data[service]['flags_submitted'].iloc[-1])
 
-        fig = self.create_plot_service_data(team_name=team_name, service_data=service_data, columns="flags_submitted")
+        fig = self.create_plot_service_data(title=f"Flags submitted: {team_name}", service_data=service_data,
+                                            columns="flags_submitted")
         self.save_plot(fig, team_name, "flags_submitted")
 
-    def create_plot_service_data(self, team_name, service_data, columns: str):
+    # * ------------------ Plot creation  ------------------
+    def create_plot_service_data(self, service_data: dict[str, DataFrame], columns: str, title: str) -> Figure:
         fig, ax = plt.subplots(figsize=(20, 10))
 
         timestamps = service_data[self.services[0]]['timestamp']
@@ -235,10 +252,7 @@ class StatisticManager:
 
         plt.grid(visible=True, which='both', color='gray', linestyle='-', linewidth=0.5)
 
-        if columns == "score_service":
-            self.format_label(f'Score service trend for Team {team_name}')
-        else:
-            self.format_label(f'Sla service trend for Team {team_name}')
+        self.format_label(title)
 
         interactive_legend = plugins.InteractiveLegendPlugin(lines, labels, alpha_unsel=0.0, alpha_over=1.0)
 
@@ -246,7 +260,7 @@ class StatisticManager:
 
         return fig
 
-    def create_plot_score_team(self, df, team_name):
+    def create_plot_score_team(self, df: DataFrame, team_name: str) -> Figure:
         fig, ax = plt.subplots(figsize=(20, 10))
 
         plt.plot(df['timestamp'], df['score_team'], linestyle='-', marker='o', markersize=3, alpha=0.6, label='Score')

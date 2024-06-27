@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+from sys import argv
 from typing import Any
 
 import bs4
@@ -17,14 +18,14 @@ BASE_URL = "http://10.10.0.1/scoreboard"
 
 class SLANotifier:
 
-    def __init__(self, services: dict, save: bool, target_team: list[str] = None):
+    def __init__(self, services: dict, create_report: bool, target_team: list[str] = None):
         self.services = services
         self.target_team = target_team
         self.notified = False
-        self.save = save
+        self.create_report = create_report
+        self.downtime_count = 0
 
-        if save:
-            self.dbmanager = DBManager()
+        self.dbmanager = DBManager() if create_report else None
 
         options = webdriver.ChromeOptions()
         options.add_argument('headless')
@@ -63,7 +64,7 @@ class SLANotifier:
 
             scores = [td.text.strip() for td in score_td]
 
-            stats_info = self.parse_service_stats(service_td)
+            stats_info = self.parse_services_stats(service_td)
 
             teams_data.append({
                 "name": team_names,
@@ -72,13 +73,13 @@ class SLANotifier:
                 "stats_service": stats_info
             })
 
-        if self.save:
+        if self.create_report:
             logging.info("Saving data on database")
             self.dbmanager.insert_records(teams_data)
 
         return teams_data
 
-    def parse_service_stats(self, service_td) -> list[dict[str, bool | Any]]:
+    def parse_services_stats(self, service_td) -> list[dict[str, bool | Any]]:
         logging.debug("Getting service data")
         stats_info = []
         for index_service, service in enumerate(service_td):
@@ -99,13 +100,14 @@ class SLANotifier:
 
         return stats_info
 
-    def send_notify(self, teams: list) -> None:
+    def notify(self, teams: list) -> None:
         logging.info("Controlling the service...")
         service_down = False
         down_services = []
         for team in teams:
             for service in team['stats_service']:
                 if service['down']:
+                    self.downtime_count += 1
                     service_down = True
                     if not self.notified:
                         notification.notify(
@@ -125,35 +127,37 @@ class SLANotifier:
 
         logging.info("Control ended!")
 
-    def run(self, repeat_after: int):
+    def run(self, repeat_after: int) -> int:
         logging.info("Starting the script...")
         logging.info("Ctrl-C for exit the execution")
-        exec_count = 0
+        exec_counter = 0
 
         logging.debug(f"Services {self.services}")
         logging.debug(f"Targets {self.target_team}")
 
-        while True:
-            exec_count += 1
-            logging.info(f"Number of execution: {exec_count}")
-            html = self.fetch_page_source(BASE_URL)
-            teams_data = self.parse_teams_data(html)
+        try:
+            while True:
+                exec_counter += 1
+                logging.info(f"Number of execution: {exec_counter}")
+                html = self.fetch_page_source(BASE_URL)
+                teams_data = self.parse_teams_data(html)
 
-            if teams_data != 404:
-                if save:
-                    self.dbmanager.insert_records(teams_data)
-                self.send_notify(teams_data)
-            else:
-                logging.error("An error occurred in fetch of page")
+                if teams_data != 404:
+                    self.dbmanager.insert_records(teams_data) if self.create_report else None
+                    self.notify(teams_data)
+                else:
+                    logging.error("An error occurred in fetch of page")
 
-            logging.debug(teams_data)
-            time.sleep(repeat_after)
+                logging.debug(teams_data)
+                time.sleep(repeat_after)
 
+        except KeyboardInterrupt:
+            logging.info("Stopping script...")
+            return self.downtime_count
 
-# ? Note si potrebbe cambiare la possibilità del salvataggio direttamente da riga di comando che da file config
 
 if __name__ == '__main__':
-    # ! All value in config.json
+    # ! All parameters in config.json
     colorama.init(autoreset=True)
 
     notification.notify(
@@ -162,25 +166,28 @@ if __name__ == '__main__':
         timeout=10
     )
 
-    _, services, targets, reload, save = get_config()
+    _, services, targets, reload, create_report = get_config()
+
+    create_report = True if argv[1] == '-r' else None
 
     if not services:
         logging.error(
             "No services found | The services must be set precisely, the numbers (the keys) must correspond to the indices of the order of the ranking, starting from the left, so the leftmost service will be 0.")
         exit(1)
 
-    if targets is None:
+    if not targets:
         logging.error(
             "No targets found | The target is the university you want to track, and it must match the name on the leaderboard.")
         exit(1)
 
-    sla = SLANotifier(services, targets, save)
-    sla.run(reload)
+    sla = SLANotifier(services, targets, create_report)
+    downtime_count = sla.run(reload)
 
-    if save:
-        # ! Operazioni sul DB e generazioni grafico
+    if create_report:
         logging.info("Generating plot")
-        StatisticManager(targets, services)
-        pass
+        statistic = StatisticManager(teams_name=targets, services_name=services, downtime_count=downtime_count)
+        statistic.generate_statistic()
+        statistic.generate_report()
+        DBManager().remove_db()
 
 # * @akiidjk
