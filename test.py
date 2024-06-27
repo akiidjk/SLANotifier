@@ -1,4 +1,6 @@
+import os
 import random
+import time
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -73,8 +75,10 @@ def generate_fake_data(num_teams, num_records_per_team, timestamp):
                                                max_value=100.00, decimal=True)
                 sla_tracker[index][j] = sla[-1]
 
-                flag_lost_tracker[index][j] = flag_lost_tracker[index][j] + random.randint(0, 100)
-                flag_submitted_tracker[index][j] = flag_submitted_tracker[index][j] + random.randint(0, 100)
+                value = 10 * len(services_name) * len(teams_name)
+
+                flag_lost_tracker[index][j] = flag_lost_tracker[index][j] + random.randint(0, value)
+                flag_submitted_tracker[index][j] = flag_submitted_tracker[index][j] + random.randint(0, value)
 
                 service_record = {
                     'name_service': service_name,
@@ -115,15 +119,15 @@ class Test:
     def run(self):
         logging.info(f'Running test')
 
-        # self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
+        self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
         self.manager.generate_statistic()
         self.manager.generate_report()
-
-        # self.manager.gen_teams_score_plot(team_name=teams_name[0])
-
         # self.db.remove_db()
         logging.info(f'Test ended')
 
 
 if __name__ == '__main__':
+    logging.info(f'Waiting before starting test')
+    logging.info(f"Pid: {os.getpid()}")
+    time.sleep(5)
     Test().run()
