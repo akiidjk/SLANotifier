@@ -5,7 +5,8 @@ services.
 
 ## Requirements
 
-- Python
+- Python (3.12 >=)
+  - For install python3.12 on linux install [pyenv](https://github.com/pyenv/pyenv?tab=readme-ov-file#installation) !!! Remind to install the [prerequisite](https://github.com/pyenv/pyenv/wiki#suggested-build-environment) for pyenv
 - Linux or Windows
 
 ## Installation
