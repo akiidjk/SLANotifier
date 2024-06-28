@@ -10,9 +10,9 @@ def get_config():
     services = config['services']
     targets = config['targets']
     reload = config['reload']
-    save = config['report']
+    report = config['report']
 
-    return logging_level, services, targets, reload, save
+    return logging_level, services, targets, reload, report
 
 
 def serialize(records: list) -> list[tuple]:
