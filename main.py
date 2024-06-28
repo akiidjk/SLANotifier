@@ -67,9 +67,9 @@ class SLANotifier:
             stats_info = self.parse_services_stats(service_td)
 
             teams_data.append({
-                "name": team_names,
+                "name_team": team_names[0],
                 "index": index,
-                "score": scores,
+                "score_team": int(scores[0][:-3]),
                 "stats_service": stats_info
             })
 
@@ -89,12 +89,12 @@ class SLANotifier:
             score_service = [div.text.strip() for div in stats]
 
             stats_info.append({
-                'name': self.services[str(index_service)],
-                'score_service': int(score_service[0]),
+                'name_service': self.services[str(index_service)],
+                'score_service': int(score_service[0][:-3]),
                 'flags_submitted': int(score_service[1]),
                 'flags_lost': int(score_service[2]),
-                'sla_value': score_service[3],
-                'down': is_down,
+                'sla_value': score_service[3][:-1],
+                'is_down': is_down,
                 'timestamp': datetime.now().isoformat()
             })
 
@@ -106,17 +106,17 @@ class SLANotifier:
         down_services = []
         for team in teams:
             for service in team['stats_service']:
-                if service['down']:
+                if service['is_down']:
                     self.downtime_count += 1
                     service_down = True
                     if not self.notified:
                         notification.notify(
                             title='Alert',
-                            message=f'The service: {service["name"]} is down for target {team["name"][0]} | {datetime.now().strftime("%H:%M:%S")}',
+                            message=f'The service: {service["name_service"]} is down for target {team["name_name"][0]} | {datetime.now().strftime("%H:%M:%S")}',
                             timeout=10
                         )
-                        logging.info(f'Notification sent for service {service["name"]} in team {team["name"][0]}.')
-                    down_services.append(service['name'])
+                        logging.info(f'Notification sent for service {service["name_service"]} in team {team["name_name"][0]}.')
+                    down_services.append(service['name_service'])
 
         if service_down:
             self.notified = True
@@ -149,6 +149,7 @@ class SLANotifier:
                     logging.error("An error occurred in fetch of page")
 
                 logging.debug(teams_data)
+                logging.info(f"Waiting {repeat_after}s before restart")
                 time.sleep(repeat_after)
 
         except KeyboardInterrupt:
@@ -168,19 +169,27 @@ if __name__ == '__main__':
 
     _, services, targets, reload, create_report = get_config()
 
-    create_report = True if argv[1] == '-r' else None
+    logging.debug(services)
+    logging.debug(targets)
+    logging.debug(reload)
+    logging.debug(create_report)
+
+    if argv[1]:
+        create_report = True if argv[1] == '-r' else None
 
     if not services:
         logging.error(
-            "No services found | The services must be set precisely, the numbers (the keys) must correspond to the indices of the order of the ranking, starting from the left, so the leftmost service will be 0.")
+            "No services found | The services must be set precisely, the numbers (the keys) must correspond to the "
+            "indices of the order of the ranking, starting from the left, so the leftmost service will be 0.")
         exit(1)
 
     if not targets:
         logging.error(
-            "No targets found | The target is the university you want to track, and it must match the name on the leaderboard.")
+            "No targets found | The target is the university you want to track, and it must match the name on the "
+            "leaderboard.")
         exit(1)
 
-    sla = SLANotifier(services, targets, create_report)
+    sla = SLANotifier(services=services, target_team=targets,create_report=create_report)
     downtime_count = sla.run(reload)
 
     if create_report:
