@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+from pprint import pprint
 from sys import argv
 from typing import Any
 
@@ -35,7 +36,7 @@ class SLANotifier:
         logging.info("Opening the browser")
         self.driver.get(url)
         logging.info("Loading content")
-        time.sleep(2)
+        time.sleep(5)
         logging.info("Content loaded")
         return self.driver.page_source
 
@@ -59,7 +60,7 @@ class SLANotifier:
 
             team_names = [span.text for span in team_name_spans]
 
-            if not any(target in team_names for target in self.target_team) and self.target_team is not None:
+            if not any(target in team_names for target in self.target_team):
                 continue
 
             scores = [td.text.strip() for td in score_td]
@@ -89,7 +90,7 @@ class SLANotifier:
             score_service = [div.text.strip() for div in stats]
 
             stats_info.append({
-                'name_service': self.services[str(index_service)],
+                'name_service': self.services[index_service],
                 'score_service': int(score_service[0][:-3]),
                 'flags_submitted': int(score_service[1]),
                 'flags_lost': int(score_service[2]),
@@ -112,10 +113,10 @@ class SLANotifier:
                     if not self.notified:
                         notification.notify(
                             title='Alert',
-                            message=f'The service: {service["name_service"]} is down for target {team["name_name"][0]} | {datetime.now().strftime("%H:%M:%S")}',
+                            message=f'The service: {service["name_service"]} is down for target {team["name_team"]} | {datetime.now().strftime("%H:%M:%S")}',
                             timeout=10
                         )
-                        logging.info(f'Notification sent for service {service["name_service"]} in team {team["name_name"][0]}.')
+                        logging.info(f'Notification sent for service {service["name_service"]} in team {team["name_team"]}.')
                     down_services.append(service['name_service'])
 
         if service_down:
@@ -174,8 +175,10 @@ if __name__ == '__main__':
     logging.debug(reload)
     logging.debug(create_report)
 
-    if argv[1]:
+    try:
         create_report = True if argv[1] == '-r' else None
+    except IndexError:
+        pass
 
     if not services:
         logging.error(
