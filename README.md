@@ -1,7 +1,6 @@
 # SLANotifier
 
-SLANotifier is a tool designed for Cyberchallange's A/D ctf that allows real-time notification of the status of its
-services.
+SLANotifier is a tool written in Python to report the status of the CyberChallenge A/D services that I developed for the UNISA team, the tool was initially born only as a pop-up notification tool that signals when a service goes down, but later I wrote a part that can be activated or not that generates a report with the total statistics of the whole race, allowing after an analysis of the team's weaknesses and strengths.
 
 ## Requirements
 
@@ -19,6 +18,10 @@ services.
 Run in the same directory of main.py
 
 ``python main.py -r`` ( -r for create a report)
+
+## Note for use
+
+To use the tool you need Python 3.12 (for a string interpolation problem if you change it you can also use it in 3.11 at your discretion)
 
 ## Configuration
 
