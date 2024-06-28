@@ -124,6 +124,10 @@ class DBManager:
                             ORDER BY timestamp
                         '''
                 c.execute(query, (service, team,))
+                logging.debug(query)
+                logging.debug(service)
+                logging.debug(team)
+
                 results = deserialize(columns, c.fetchall())
         except sqlite3.OperationalError as error:
             logging.error(f"Error with fetching records {error}")
@@ -133,3 +137,4 @@ class DBManager:
             return results
         else:
             logging.error("Error with fetching records or db is empty")
+            return 0

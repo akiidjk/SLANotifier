@@ -91,7 +91,7 @@ class StatisticManager:
 
 ### Score Team
 
-![plot_score]({os.path.join("/", "reports", "plots_image", f"plot-{team}-team_score.png")})
+![plot_score]({os.path.abspath(os.path.join("/", "reports", "plots_image", f"plot-{team}-team_score.png"))})
 
 **Interactive (better visual)**: {os.path.abspath(os.path.join("reports", "plots_interactive", f"plot-{team}-team_score.html"))}
 
@@ -146,6 +146,7 @@ class StatisticManager:
         service_data = {}
 
         for service_name in self.services:
+            logging.debug(service_name)
             data = self.db.fetch_by_team_service(team=team_name, service=service_name, columns=columns)
             logging.debug(f"{len(data)}, {service_name}, {team_name}, {columns}")
             df = pd.DataFrame(data)
@@ -204,6 +205,7 @@ class StatisticManager:
 
     def gen_teams_score_plot(self, team_name: str) -> None:
         data = self.db.fetch_by_team(team=team_name, columns=("score_team",))
+        logging.debug(team_name)
 
         logging.debug(f"Data fetched: {len(data)}")
 

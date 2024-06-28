@@ -1,6 +1,5 @@
 import time
 from datetime import datetime
-from pprint import pprint
 from sys import argv
 from typing import Any
 
@@ -8,6 +7,7 @@ import bs4
 import colorama
 from plyer import notification
 from selenium import webdriver
+from selenium.webdriver.support.wait import WebDriverWait
 
 from lib.db_manager import DBManager
 from lib.logger import logging
@@ -36,6 +36,8 @@ class SLANotifier:
         logging.info("Opening the browser")
         self.driver.get(url)
         logging.info("Loading content")
+        logging.info("Waiting for page to load")
+        WebDriverWait(self.driver, 10)
         time.sleep(5)
         logging.info("Content loaded")
         return self.driver.page_source
@@ -74,10 +76,6 @@ class SLANotifier:
                 "stats_service": stats_info
             })
 
-        if self.create_report:
-            logging.info("Saving data on database")
-            self.dbmanager.insert_records(teams_data)
-
         return teams_data
 
     def parse_services_stats(self, service_td) -> list[dict[str, bool | Any]]:
@@ -93,7 +91,7 @@ class SLANotifier:
                 'name_service': self.services[index_service],
                 'score_service': int(score_service[0][:-3]),
                 'flags_submitted': int(score_service[1]),
-                'flags_lost': int(score_service[2]),
+                'flags_lost': int(score_service[2]) * -1,
                 'sla_value': score_service[3][:-1],
                 'is_down': is_down,
                 'timestamp': datetime.now().isoformat()
@@ -116,7 +114,8 @@ class SLANotifier:
                             message=f'The service: {service["name_service"]} is down for target {team["name_team"]} | {datetime.now().strftime("%H:%M:%S")}',
                             timeout=10
                         )
-                        logging.info(f'Notification sent for service {service["name_service"]} in team {team["name_team"]}.')
+                        logging.info(
+                            f'Notification sent for service {service["name_service"]} in team {team["name_team"]}.')
                     down_services.append(service['name_service'])
 
         if service_down:
@@ -144,7 +143,9 @@ class SLANotifier:
                 teams_data = self.parse_teams_data(html)
 
                 if teams_data != 404:
-                    self.dbmanager.insert_records(teams_data) if self.create_report else None
+                    if self.create_report:
+                        logging.info("Saving data on database")
+                        self.dbmanager.insert_records(teams_data)
                     self.notify(teams_data)
                 else:
                     logging.error("An error occurred in fetch of page")
@@ -161,7 +162,8 @@ class SLANotifier:
 if __name__ == '__main__':
     # ! All parameters in config.json
     colorama.init(autoreset=True)
-
+    logging.info("Cleaning db")
+    DBManager().remove_db()
     notification.notify(
         title='Check notification',
         message=f'This notification is only for check the notification system',
@@ -192,14 +194,14 @@ if __name__ == '__main__':
             "leaderboard.")
         exit(1)
 
-    sla = SLANotifier(services=services, target_team=targets,create_report=create_report)
+    sla = SLANotifier(services=services, target_team=targets, create_report=create_report)
     downtime_count = sla.run(reload)
 
     if create_report:
         logging.info("Generating plot")
-        statistic = StatisticManager(teams_name=targets, services_name=services, downtime_count=downtime_count)
+        statistic = StatisticManager(teams_name=targets, services_name=[services[key] for key in services.keys()],
+                                     downtime_count=downtime_count)
         statistic.generate_statistic()
         statistic.generate_report()
-        DBManager().remove_db()
-
+        exit(0)
 # * @akiidjk
