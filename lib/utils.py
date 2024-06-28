@@ -7,7 +7,7 @@ def get_config():
         config = json.load(f)
 
     logging_level = config['logging_level']
-    services = config['services']
+    services = {int(key): value for key, value in config['services'].items()}
     targets = config['targets']
     reload = config['reload']
     report = config['report']
