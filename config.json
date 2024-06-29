@@ -1,17 +1,7 @@
 {
   "logging_level": "INFO",
-  "services": {
-    "0": "CheesyCheats - 1",
-    "1": "CheesyCheats - 2",
-    "2": "GabibbiTowers - 1",
-    "3": "GabibbiTowers - 2",
-    "4": "gadgethorse - 1",
-    "5": "gadgethorse - 2",
-    "6": "MineCClicker"
-  },
-  "targets": [
-    "Università degli Studi di Salerno"
-  ],
+  "services": {},
+  "targets": [],
   "reload": 120,
   "report": true
 }
