@@ -56,7 +56,7 @@ class DBManager:
             c = conn.cursor()
             query = '''
                 INSERT INTO table_records (name_team, rank_team, score_team, name_service, score_service, flags_submitted, flags_lost, sla_value, is_down, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             '''
             c.executemany(query, records)
             conn.commit()

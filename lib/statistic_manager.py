@@ -102,6 +102,14 @@ class StatisticManager:
 
 ---
 
+### Rank Team
+
+![plot_score]({os.path.abspath(os.path.join("/", "reports", "plots_image", f"plot-{team}-rank_team.png"))})
+
+**Interactive (better visual)**: {os.path.abspath(os.path.join("reports", "plots_interactive", f"plot-{team}-rank_team.html"))}
+
+---
+
 ### Score Service
 
 ![plot_score]({os.path.join("/", "reports", "plots_image", f"plot-{team}-team_services_score.png")})
@@ -170,7 +178,6 @@ class StatisticManager:
         plt.legend()
 
         plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.HourLocator(interval=1))
         plt.gcf().autofmt_xdate()
 
     def save_plot(self, fig, team_name: str, spec: str) -> None:
@@ -211,8 +218,6 @@ class StatisticManager:
     def gen_teams_score_plot(self, team_name: str) -> None:
         data = self.db.fetch_by_team(team=team_name, columns=("score_team",))
         logging.debug(team_name)
-
-        logging.debug(f"Data fetched: {len(data)}")
 
         data_frame = pd.DataFrame(data)
         data_frame['timestamp'] = pd.to_datetime(data_frame['timestamp'])
@@ -287,13 +292,16 @@ class StatisticManager:
 
         return fig
 
-    def create_plot_team(self, df: DataFrame, team_name: str, column) -> Figure:
+    def create_plot_team(self, df: DataFrame, team_name: str, column: str) -> Figure:
         fig, ax = plt.subplots(figsize=(20, 10))
 
-        plt.plot(df['timestamp'], df[column], linestyle='-', marker='o', markersize=3, alpha=0.6, label='Score')
+        plt.plot(df['timestamp'], df[column], linestyle='-', marker='o', markersize=3, alpha=0.6, label=column)
         plt.ylim(bottom=0)
         plt.grid(True)
 
-        self.format_label(f'Score trend for Team {team_name}')
+        if "rank" in column:
+            self.format_label(f'Rank trend for Team {team_name}')
+        else:
+            self.format_label(f'Score trend for Team {team_name}')
 
         return fig

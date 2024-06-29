@@ -59,6 +59,7 @@ def generate_fake_data(num_teams, num_records_per_team, timestamp):
     for index in range(num_teams):
         team_record = {
             'name_team': teams_name[index],
+            'rank_team': 10,
             'score_team': score_tracker[index],
             'stats_service': []
         }
@@ -118,11 +119,11 @@ class Test:
 
     def run(self):
         logging.info(f'Running test')
-
+        # self.db.remove_db()
         self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
         self.manager.generate_statistic()
         self.manager.generate_report()
-        # self.db.remove_db()
+
         logging.info(f'Test ended')
 
 
