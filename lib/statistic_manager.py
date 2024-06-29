@@ -31,6 +31,8 @@ class StatisticManager:
         self.max_score_service = {team: {} for team in teams_name}
         self.min_score_service = {team: {} for team in teams_name}
         self.min_sla = {team: {} for team in teams_name}
+        self.max_rank = {team: {} for team in teams_name}
+        self.min_rank = {team: {} for team in teams_name}
 
     # * ------------------ Init functions  ------------------
 
@@ -67,6 +69,7 @@ class StatisticManager:
             self.gen_sla_service_score_plot(team)
             self.gen_flags_submitted_service_score(team)
             self.gen_flags_lost_service_score(team)
+            self.gen_teams_rank_plot(team)
         logging.info(f"Statistic Generated")
 
     def generate_report(self) -> None:
@@ -80,13 +83,15 @@ class StatisticManager:
 
 - **Max total score:** {self.max_score[team]}
 - **Min total score:** {self.min_score[team]}
+- **Max total rank:** {self.max_rank[team]}
+- **Min total rank:** {self.min_rank[team]}
 - **Total Flags submitted**: {sum(self.total_flags_submitted[team].values())}
 - **Total Flags lost**: {sum(self.total_flags_lost[team].values())}
 - **Flags submitted:** {self.format_results(self.total_flags_submitted, team)}
 - **Flag lost:** {self.format_results(self.total_flags_lost, team)}
 - **Min sla:** {self.format_results(self.min_sla, team)}
 - **Max score for service:** {self.format_results(self.max_score_service, team)}
-- **Min score:** {self.format_results(self.min_score_service, team)}
+- **Min score for service:** {self.format_results(self.min_score_service, team)}
 - **Numbers of downtime:** {self.downtime_count}
 
 ### Score Team
@@ -215,8 +220,25 @@ class StatisticManager:
         self.max_score[team_name] = int(data_frame['score_team'].max())
         self.min_score[team_name] = int(data_frame['score_team'].min())
 
-        fig = self.create_plot_score_team(data_frame, team_name)
+        fig = self.create_plot_team(data_frame, team_name, 'score_team')
         self.save_plot(fig, team_name, "team_score")
+
+        plt.close()
+
+    def gen_teams_rank_plot(self, team_name: str) -> None:
+        data = self.db.fetch_by_team(team=team_name, columns=("rank_team",))
+        logging.debug(team_name)
+
+        logging.debug(f"Data fetched: {len(data)}")
+
+        data_frame = pd.DataFrame(data)
+        data_frame['timestamp'] = pd.to_datetime(data_frame['timestamp'])
+
+        self.max_rank[team_name] = int(data_frame['rank_team'].max())
+        self.min_rank[team_name] = int(data_frame['rank_team'].min())
+
+        fig = self.create_plot_team(data_frame, team_name, 'rank_team')
+        self.save_plot(fig, team_name, "rank_team")
 
         plt.close()
 
@@ -265,10 +287,10 @@ class StatisticManager:
 
         return fig
 
-    def create_plot_score_team(self, df: DataFrame, team_name: str) -> Figure:
+    def create_plot_team(self, df: DataFrame, team_name: str, column) -> Figure:
         fig, ax = plt.subplots(figsize=(20, 10))
 
-        plt.plot(df['timestamp'], df['score_team'], linestyle='-', marker='o', markersize=3, alpha=0.6, label='Score')
+        plt.plot(df['timestamp'], df[column], linestyle='-', marker='o', markersize=3, alpha=0.6, label='Score')
         plt.ylim(bottom=0)
         plt.grid(True)
 

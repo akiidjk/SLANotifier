@@ -21,6 +21,7 @@ def serialize(records: list) -> list[tuple]:
         for service in record['stats_service']:
             formatted_record = (
                 record['name_team'],
+                record['rank_team'],
                 record['score_team'],
                 service['name_service'],
                 service['score_service'],

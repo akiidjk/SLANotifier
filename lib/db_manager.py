@@ -19,6 +19,7 @@ class DBManager:
                     CREATE TABLE IF NOT EXISTS table_records (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         name_team VARCHAR(255),
+                        rank_team INTEGER,
                         score_team INTEGER,
                         name_service VARCHAR(255),
                         score_service INTEGER,
@@ -54,7 +55,7 @@ class DBManager:
         with sqlite3.connect(self.name_db) as conn:
             c = conn.cursor()
             query = '''
-                INSERT INTO table_records (name_team, score_team, name_service, score_service, flags_submitted, flags_lost, sla_value, is_down, timestamp)
+                INSERT INTO table_records (name_team, rank_team, score_team, name_service, score_service, flags_submitted, flags_lost, sla_value, is_down, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             '''
             c.executemany(query, records)
@@ -137,4 +138,4 @@ class DBManager:
             return results
         else:
             logging.error("Error with fetching records or db is empty")
-            return 0
+            return []

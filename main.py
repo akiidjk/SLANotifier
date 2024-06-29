@@ -71,7 +71,7 @@ class SLANotifier:
 
             teams_data.append({
                 "name_team": team_names[0],
-                "index": index,
+                "rank_team": index,
                 "score_team": int(scores[0][:-3]),
                 "stats_service": stats_info
             })
