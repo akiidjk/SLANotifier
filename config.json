@@ -3,5 +3,5 @@
   "services": {},
   "targets": [],
   "reload": 120,
-  "report": true
+  "report": false
 }
