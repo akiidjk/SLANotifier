@@ -7,12 +7,11 @@ def get_config():
         config = json.load(f)
 
     logging_level = config['logging_level']
-    services = {int(key): value for key, value in config['services'].items()}
     targets = config['targets']
     reload = config['reload']
     report = config['report']
 
-    return logging_level, services, targets, reload, report
+    return logging_level, targets, reload, report
 
 
 def serialize(records: list) -> list[tuple]:

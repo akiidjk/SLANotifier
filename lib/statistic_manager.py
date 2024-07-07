@@ -2,30 +2,26 @@ import logging
 import os
 from datetime import datetime
 
-import matplotlib.dates as mdates
 import mpld3
-import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 from mpld3 import plugins
-from pandas import DataFrame
 
-from lib.db_manager import DBManager
+from lib.API import API
 
 
 class StatisticManager:
-    def __init__(self, teams_name: list, services_name: list, downtime_count: int):
-        self.db = DBManager()
+    def __init__(self, teams_name: list, downtime_count: int, services: list):
         self.teams = teams_name
-        self.services = services_name
         self.downtime_count = downtime_count
+        self.services = services
         self.base_path = os.path.abspath(os.getcwd())
-
+        self.api = API()
         self.init_directory()
         self.file_report = self.init_file_report()
 
-        self.total_flags_lost = {team: {} for team in teams_name}
-        self.total_flags_submitted = {team: {} for team in teams_name}
+        self.total_flags_lost = {team: {service: 0 for service in self.services} for team in teams_name}
+        self.total_flags_submitted = {team: {service: 0 for service in self.services} for team in teams_name}
         self.max_score = {team: {} for team in teams_name}
         self.min_score = {team: {} for team in teams_name}
         self.max_score_service = {team: {} for team in teams_name}
@@ -96,7 +92,7 @@ class StatisticManager:
 
 ### Score Team
 
-![plot_score]({os.path.abspath(os.path.join("/", "reports", "plots_image", f"plot-{team}-team_score.png"))})
+![plot_score]({os.path.join("/", "reports", "plots_image", f"plot-{team}-team_score.png")})
 
 **Interactive (better visual)**: {os.path.abspath(os.path.join("reports", "plots_interactive", f"plot-{team}-team_score.html"))}
 
@@ -147,18 +143,8 @@ class StatisticManager:
             ["\n\t- " + key + ": " + str(results[team][key]) + ", " for key in results[team].keys()])
         return formatted_result
 
-    def fetch_service_data(self, team_name: str, columns: tuple) -> dict[str, DataFrame]:
-        service_data = {}
-
-        for service_name in self.services:
-            logging.debug(service_name)
-            data = self.db.fetch_by_team_service(team=team_name, service=service_name, columns=columns)
-            logging.debug(f"{len(data)}, {service_name}, {team_name}, {columns}")
-            df = pd.DataFrame(data)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            service_data[service_name] = df
-
-        return service_data
+    def fetch_service_data(self):
+        pass
 
     @staticmethod
     def format_label(title: str) -> None:
@@ -169,8 +155,6 @@ class StatisticManager:
         plt.grid(True)
         plt.legend()
 
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.HourLocator(interval=1))
         plt.gcf().autofmt_xdate()
 
     def save_plot(self, fig, team_name: str, spec: str) -> None:
@@ -187,91 +171,121 @@ class StatisticManager:
 
     # * ------------------ Generation of statistic  ------------------
 
-    def gen_teams_services_score_plot(self, team_name: str) -> None:
-        service_data = self.fetch_service_data(team_name, columns=("score_service",))
+    def fetch_score_team(self, team_name: str) -> list[int]:
+        service_data = self.api.get_team_chart(team_name)
 
-        for service in service_data:
-            self.max_score_service[team_name][service] = int(service_data[service]['score_service'].max())
-            self.min_score_service[team_name][service] = int(service_data[service]['score_service'].min())
+        score_team = []
+
+        for round in range(int(service_data['rounds'] + 1)):
+            score_team.append(0)
+            for index, service in enumerate(self.services):
+                score_team[round] += service_data['services'][index]['score'][round]
+
+        return score_team
+
+    def gen_teams_services_score_plot(self, team_name: str) -> None:
+        service_data = self.api.get_team_chart(team_name)
+        for index, service in enumerate(self.services):
+            self.max_score_service[team_name][service] = int(max(service_data['services'][index]['score']))
+            self.min_score_service[team_name][service] = int(min(service_data['services'][index]['score']))
 
         fig = self.create_plot_service_data(title=f"Services score: {team_name}", service_data=service_data,
-                                            columns="score_service")
+                                            value="score")
         self.save_plot(fig, team_name, "team_services_score")
 
+    def fetch_sla_service(self, team_name: str) -> dict:
+        sla_data = self.api.get_team_table(team_name)
+
+        rounds = len(sla_data['rounds'])
+
+        sla_service = {service: [] for service in self.services}
+
+        counters = {service: 0 for service in self.services}
+
+        for round in range(rounds):
+            for index, name_service in enumerate(self.services):
+                service = sla_data['rounds'][round]['services'][index]
+                if all(check['exitCode'] == 101 for check in service['checks']):
+                    counters[name_service] += 1
+
+                logging.debug(f"Service: {service['shortname']} | {counters[name_service]} / {round + 1}")
+                sla_service[service['shortname']].append((counters[name_service] / (round + 1)) * 100)
+
+        logging.debug(sla_service)
+
+        return sla_service
+
     def gen_sla_service_score_plot(self, team_name: str) -> None:
-        service_data = self.fetch_service_data(team_name=team_name, columns=("sla_value",))
+        service_data = self.fetch_sla_service(team_name=team_name)
 
-        for service in service_data:
-            self.min_sla[team_name][service] = int(service_data[service]['sla_value'].min())
+        for service in self.services:
+            self.min_sla[team_name][service] = int(min(service_data[service]))
 
-        fig = self.create_plot_service_data(title=f"Sla value: {team_name}", service_data=service_data,
-                                            columns="sla_value")
+        fig = self.create_plot_service_sla(title=f"Sla value: {team_name}", service_data=service_data)
         self.save_plot(fig, team_name, "sla")
 
     def gen_teams_score_plot(self, team_name: str) -> None:
-        data = self.db.fetch_by_team(team=team_name, columns=("score_team",))
+        team_data = self.fetch_score_team(team_name=team_name)
         logging.debug(team_name)
 
-        logging.debug(f"Data fetched: {len(data)}")
+        logging.debug(f"Data fetched: {len(team_data)}")
 
-        data_frame = pd.DataFrame(data)
-        data_frame['timestamp'] = pd.to_datetime(data_frame['timestamp'])
+        self.max_score[team_name] = max(team_data)
+        self.min_score[team_name] = min(team_data)
 
-        self.max_score[team_name] = int(data_frame['score_team'].max())
-        self.min_score[team_name] = int(data_frame['score_team'].min())
-
-        fig = self.create_plot_team(data_frame, team_name, 'score_team')
+        fig = self.create_plot_team(team_data, team_name)
         self.save_plot(fig, team_name, "team_score")
 
         plt.close()
 
     def gen_teams_rank_plot(self, team_name: str) -> None:
-        data = self.db.fetch_by_team(team=team_name, columns=("rank_team",))
+        team_data = self.api.get_team_table(team_name)
         logging.debug(team_name)
 
-        logging.debug(f"Data fetched: {len(data)}")
+        logging.debug(f"Data fetched: {len(team_data)}")
 
-        data_frame = pd.DataFrame(data)
-        data_frame['timestamp'] = pd.to_datetime(data_frame['timestamp'])
+        team_data = [round['position'] for round in team_data['rounds']]
 
-        self.max_rank[team_name] = int(data_frame['rank_team'].max())
-        self.min_rank[team_name] = int(data_frame['rank_team'].min())
+        self.max_rank[team_name] = int(max(team_data))
+        self.min_rank[team_name] = int(min(team_data))
 
-        fig = self.create_plot_team(data_frame, team_name, 'rank_team')
+        fig = self.create_plot_team(team_data, 'position')
         self.save_plot(fig, team_name, "rank_team")
 
         plt.close()
 
     def gen_flags_lost_service_score(self, team_name: str) -> None:
-        service_data = self.fetch_service_data(team_name=team_name, columns=("flags_lost",))
+        service_data = self.api.get_team_table(team_name)
 
-        for service in self.services:
-            self.total_flags_lost[team_name][service] = int(service_data[service]['flags_lost'].iloc[-1])
+        for index, service in enumerate(self.services):
+            self.total_flags_lost[team_name][service] += int(
+                service_data['rounds'][-1]['services'][index]['lost'])
 
-        fig = self.create_plot_service_data(title=f"Flags lost: {team_name}", service_data=service_data,
-                                            columns="flags_lost")
+        fig = self.create_plot_lost_stolen_data(title=f"Flags lost: {team_name}", service_data=service_data,
+                                                value="lost")
         self.save_plot(fig, team_name, "flags_lost")
 
     def gen_flags_submitted_service_score(self, team_name: str) -> None:
-        service_data = self.fetch_service_data(team_name=team_name, columns=("flags_submitted",))
+        service_data = self.api.get_team_table(team_name)
 
-        for service in self.services:
-            self.total_flags_submitted[team_name][service] = int(service_data[service]['flags_submitted'].iloc[-1])
+        for index, service in enumerate(self.services):
+            self.total_flags_submitted[team_name][service] += int(
+                service_data['rounds'][-1]['services'][index]['stolen'])
 
-        fig = self.create_plot_service_data(title=f"Flags submitted: {team_name}", service_data=service_data,
-                                            columns="flags_submitted")
+        fig = self.create_plot_lost_stolen_data(title=f"Flags submitted: {team_name}", service_data=service_data,
+                                                value="stolen")
         self.save_plot(fig, team_name, "flags_submitted")
 
     # * ------------------ Plot creation  ------------------
-    def create_plot_service_data(self, service_data: dict[str, DataFrame], columns: str, title: str) -> Figure:
+    def create_plot_service_data(self, service_data: dict, title: str, value) -> Figure:
         fig, ax = plt.subplots(figsize=(20, 10))
 
-        timestamps = service_data[self.services[0]]['timestamp']
+        rounds = [x for x in range(int(service_data['rounds'] + 1))]
 
         lines = []
         labels = []
-        for service in self.services:
-            line, = ax.plot(timestamps, service_data[service][columns], label=service, alpha=0.6)
+        for index, service in enumerate(self.services):
+            line, = ax.plot(rounds, service_data['services'][index][value], label=service, alpha=0.6)
             lines.append(line)
             labels.append(service)
 
@@ -287,10 +301,60 @@ class StatisticManager:
 
         return fig
 
-    def create_plot_team(self, df: DataFrame, team_name: str, column) -> Figure:
+    def create_plot_lost_stolen_data(self, service_data: dict, title: str, value: str) -> Figure:
         fig, ax = plt.subplots(figsize=(20, 10))
 
-        plt.plot(df['timestamp'], df[column], linestyle='-', marker='o', markersize=3, alpha=0.6, label='Score')
+        rounds = [x for x in range(len(service_data['rounds']))]
+
+        lines = []
+        labels = []
+        for index, service in enumerate(self.services):
+            data = [service_data['rounds'][x]['services'][index][value] for x in range(len(service_data['rounds']))]
+            line, = ax.plot(rounds, data, label=service, alpha=0.6)
+            lines.append(line)
+            labels.append(service)
+
+        plt.ylim(bottom=0)
+
+        plt.grid(visible=True, which='both', color='gray', linestyle='-', linewidth=0.5)
+
+        self.format_label(title)
+
+        interactive_legend = plugins.InteractiveLegendPlugin(lines, labels, alpha_unsel=0.0, alpha_over=1.0)
+
+        plugins.connect(fig, interactive_legend)
+
+        return fig
+
+    def create_plot_service_sla(self, service_data: dict, title: str) -> Figure:
+        fig, ax = plt.subplots(figsize=(20, 10))
+
+        lines = []
+        labels = []
+        for index, service in enumerate(self.services):
+            rounds = [x for x in range(int(len(service_data[service])))]
+            line, = ax.plot(rounds, service_data[service], label=service, alpha=0.6)
+            lines.append(line)
+            labels.append(service)
+
+        plt.ylim(bottom=0)
+
+        plt.grid(visible=True, which='both', color='gray', linestyle='-', linewidth=0.5)
+
+        self.format_label(title)
+
+        interactive_legend = plugins.InteractiveLegendPlugin(lines, labels, alpha_unsel=0.0, alpha_over=1.0)
+
+        plugins.connect(fig, interactive_legend)
+
+        return fig
+
+    def create_plot_team(self, data: list, team_name: str) -> Figure:
+        fig, ax = plt.subplots(figsize=(20, 10))
+
+        rounds = [x for x in range(int(len(data)))]
+
+        plt.plot(rounds, data, linestyle='-', marker='o', markersize=3, alpha=0.6, label='Score')
         plt.ylim(bottom=0)
         plt.grid(True)
 

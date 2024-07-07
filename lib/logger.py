@@ -58,7 +58,7 @@ init(autoreset=True)
 for handler in logging.root.handlers[:]:
     logging.root.removeHandler(handler)
 
-logging_level, _, _, _, _ = get_config()
+logging_level, _, _, _ = get_config()
 
 # Set the logging level
 level_num = logging.getLevelName(logging_level)

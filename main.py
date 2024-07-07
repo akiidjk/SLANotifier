@@ -3,176 +3,125 @@ from datetime import datetime
 from sys import argv
 from typing import Any
 
-import bs4
 import colorama
 from plyer import notification
-from selenium import webdriver
-from selenium.webdriver.support.wait import WebDriverWait
 
-from lib.db_manager import DBManager
+from lib.API import API
 from lib.logger import logging
 from lib.statistic_manager import StatisticManager
 from lib.utils import get_config
 
-BASE_URL = "http://10.10.0.1/scoreboard"
-
 
 class SLANotifier:
 
-    def __init__(self, services: dict, create_report: bool, target_team: list[str] = None):
-        self.services = services
+    def __init__(self, create_report: bool, target_team: list[str] = None):
         self.target_team = target_team
-        self.notified = False
+        self.notified = {}
         self.create_report = create_report
         self.downtime_count = 0
+        self.services = []
+        self.exec_counter = 20
+        self.api = API()
 
-        self.dbmanager = DBManager() if create_report else None
+    @staticmethod
+    def notify(name_service: str, team_name: str) -> None:
+        notification.notify(
+            title='Alert',
+            message=f'The service: {name_service} is down for target {team_name} | {datetime.now().strftime("%H:%M:%S")}',
+            timeout=10
+        )
+        logging.info(
+            f'Notification sent for service {name_service} in team {team_name}.')
 
-        options = webdriver.ChromeOptions()
-        options.add_argument('headless')
-        self.driver = webdriver.Chrome(options=options)
-
-    def fetch_page_source(self, url: str) -> str:
-        logging.info("Opening the browser")
-        self.driver.get(url)
-        logging.info("Loading content")
-        logging.info("Waiting for page to load")
-        WebDriverWait(self.driver, 10)
-        time.sleep(5)
-        logging.info("Content loaded")
-        return self.driver.page_source
-
-    def parse_teams_data(self, html: str) -> list[dict[str, list | int | list[dict[str, bool]]]] | int:
-        logging.debug("Getting teams data")
-
-        teams_data = []
-
-        soup = bs4.BeautifulSoup(html, 'html.parser')
-        tr_tags = soup.find_all('tr')
-
-        logging.info(f"Found {len(tr_tags)} teams")
-
-        if len(tr_tags) == 0:
-            return 404
-
-        for index, tr in enumerate(tr_tags):
-            service_td = tr.find_all('td', class_="px-1 align-start text-start")
-            team_name_spans = tr.find_all('span', class_='fw-bold')
-            score_td = tr.find_all('td', class_='px-1 align-middle')
-
-            team_names = [span.text for span in team_name_spans]
-
-            if not any(target in team_names for target in self.target_team):
-                continue
-
-            scores = [td.text.strip() for td in score_td]
-
-            stats_info = self.parse_services_stats(service_td)
-
-            teams_data.append({
-                "name_team": team_names[0],
-                "rank_team": index,
-                "score_team": int(scores[0][:-3]),
-                "stats_service": stats_info
-            })
-
-        return teams_data
-
-    def parse_services_stats(self, service_td) -> list[dict[str, bool | Any]]:
-        logging.debug("Getting service data")
-        stats_info = []
-        for index_service, service in enumerate(service_td):
-            stats = service.find_all("div", class_="d-flex")
-            is_down = any(button for button in service.find_all("button", class_="btn-danger"))
-
-            score_service = [div.text.strip() for div in stats]
-
-            stats_info.append({
-                'name_service': self.services[index_service],
-                'score_service': int(score_service[0][:-3]),
-                'flags_submitted': int(score_service[1]),
-                'flags_lost': int(score_service[2]) * -1,
-                'sla_value': score_service[3][:-1],
-                'is_down': is_down,
-                'timestamp': datetime.now().isoformat()
-            })
-
-        return stats_info
-
-    def notify(self, teams: list) -> None:
+    def check_notify(self, services_status: list, team_name: str) -> None:
         logging.info("Controlling the service...")
         service_down = False
         down_services = []
-        for team in teams:
-            for service in team['stats_service']:
-                if service['is_down']:
-                    self.downtime_count += 1
-                    service_down = True
-                    if not self.notified:
-                        notification.notify(
-                            title='Alert',
-                            message=f'The service: {service["name_service"]} is down for target {team["name_team"]} | {datetime.now().strftime("%H:%M:%S")}',
-                            timeout=10
-                        )
-                        logging.info(
-                            f'Notification sent for service {service["name_service"]} in team {team["name_team"]}.')
-                    down_services.append(service['name_service'])
+
+        for service in services_status:
+            if service['exitCode'] != 101:
+                service_down = True
+                down_services.append(service['name_service'])
+                self.downtime_count += 1
+                logging.warning(
+                    f"Service {service['name_service']} is down | {service['stdout']} | {service['action']} | {service['exitCode']}")
+                if not self.notified[team_name]:
+                    self.notify(name_service=service['name_service'], team_name=team_name)
 
         if service_down:
-            self.notified = True
+            self.notified[team_name] = True
             logging.warning(f"Some service are down: {down_services}")
         else:
-            self.notified = False
+            self.notified[team_name] = False
             logging.info(f'All service are UP.')
-
+        logging.debug(f"{self.notified}")
         logging.info("Control ended!")
 
-    def run(self, repeat_after: int) -> int:
+    def get_teams_info(self) -> list[dict]:
+        data = []
+        for team in self.target_team:
+            data.append(self.api.get_team_table(team))
+        return data
+
+    def check_status(self, team_data: dict) -> list[dict[str, Any]]:
+        # last_round = team_data['rounds'][-1]
+        last_round = team_data['rounds'][self.exec_counter]
+        status_report = []
+        for service in last_round['services']:
+            for check in service['checks']:
+                if check['exitCode'] != 101:
+                    status_report.append({
+                        "name_service": service['shortname'],
+                        "stdout": check['stdout'],
+                        "action": check['action'],
+                        "exitCode": check['exitCode']
+                    })
+
+        return status_report
+
+    def run(self, repeat_after: int) -> tuple[int, list[Any]]:
         logging.info("Starting the script...")
         logging.info("Ctrl-C for exit the execution")
-        exec_counter = 0
 
-        logging.debug(f"Services {self.services}")
         logging.debug(f"Targets {self.target_team}")
 
         try:
             while True:
-                exec_counter += 1
-                logging.info(f"Number of execution: {exec_counter}")
-                html = self.fetch_page_source(BASE_URL)
-                teams_data = self.parse_teams_data(html)
+                self.exec_counter += 1
+                logging.info(f"Number of execution: {self.exec_counter}")
+                teams_data = self.get_teams_info()
+                self.services = [service['shortname'] for service in
+                                 teams_data[0]['services']]  # For mapping the services
 
-                if teams_data != 404:
-                    if self.create_report:
-                        logging.info("Saving data on database")
-                        self.dbmanager.insert_records(teams_data)
-                    self.notify(teams_data)
-                else:
-                    logging.error("An error occurred in fetch of page")
+                logging.debug("Teams fetched:" + str(len(teams_data)))
+                logging.debug(f"{self.services = }")
 
-                logging.debug(teams_data)
+                for team in teams_data:
+                    logging.info(f"Team: {team['teamName']}")
+                    logging.debug(f"Found round: {len(team['rounds'])}")
+
+                    status_report = self.check_status(team)
+                    self.check_notify(status_report, team['teamName'])
+
                 logging.info(f"Waiting {repeat_after}s before restart")
                 time.sleep(repeat_after)
-
         except KeyboardInterrupt:
             logging.info("Stopping script...")
-            return self.downtime_count
+            return self.downtime_count, self.services
 
 
 if __name__ == '__main__':
     # ! All parameters in config.json
     colorama.init(autoreset=True)
     logging.info("Cleaning db")
-    DBManager().remove_db()
     notification.notify(
         title='Check notification',
         message=f'This notification is only for check the notification system',
         timeout=10
     )
 
-    _, services, targets, reload, create_report = get_config()
+    _, targets, reload, create_report = get_config()
 
-    logging.debug(services)
     logging.debug(targets)
     logging.debug(reload)
     logging.debug(create_report)
@@ -182,25 +131,18 @@ if __name__ == '__main__':
     except IndexError:
         pass
 
-    if not services:
-        logging.error(
-            "No services found | The services must be set precisely, the numbers (the keys) must correspond to the "
-            "indices of the order of the ranking, starting from the left, so the leftmost service will be 0.")
-        exit(1)
-
     if not targets:
         logging.error(
             "No targets found | The target is the university you want to track, and it must match the name on the "
             "leaderboard.")
         exit(1)
 
-    sla = SLANotifier(services=services, target_team=targets, create_report=create_report)
-    downtime_count = sla.run(reload)
+    sla = SLANotifier(target_team=targets, create_report=create_report)
+    downtime_count, services = sla.run(reload)
 
     if create_report:
         logging.info("Generating plot")
-        statistic = StatisticManager(teams_name=targets, services_name=[services[key] for key in services.keys()],
-                                     downtime_count=downtime_count)
+        statistic = StatisticManager(teams_name=targets, downtime_count=downtime_count, services=services)
         statistic.generate_statistic()
         statistic.generate_report()
         exit(0)

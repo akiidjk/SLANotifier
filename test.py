@@ -8,8 +8,8 @@ from lib.db_manager import DBManager
 from lib.logger import logging
 from lib.statistic_manager import StatisticManager
 
-teams_name = ["Unica", "Uniba", "Unige", "Unisa", "Unipi"]
-services_name = ['Slack', 'Twitter', 'Facebook', 'Instagram', 'Reddit', 'Youtube']
+teams_name = ["unisa"]
+services_name = ['Inlook-1', 'Inlook-2', 'CCalendar-1', 'CCalendar-2', 'CCForms-1', 'CCForms-2', 'ExCCel-1', 'ExCCel-2']
 
 score_tracker = [10_000 * len(services_name)] * len(teams_name)
 sla_tracker = [[100] * len(services_name)] * len(teams_name)
@@ -103,7 +103,7 @@ def generate_fake_data(num_teams, num_records_per_team, timestamp):
 class Test:
     def __init__(self):
         self.db = DBManager()
-        self.manager = StatisticManager(teams_name, services_name, 0)
+        self.manager = StatisticManager(teams_name=teams_name, services=services_name, downtime_count=0)
         pass
 
     def generate_data(self, num_teams=10, num_records_per_team=10, ticks=1000):
@@ -119,7 +119,7 @@ class Test:
     def run(self):
         logging.info(f'Running test')
 
-        self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
+        # self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
         self.manager.generate_statistic()
         self.manager.generate_report()
         # self.db.remove_db()
