@@ -34,12 +34,8 @@ your discretion)
 In the file config.json there are 5 params to configure:
 
 - **Log level**: The possible log levels are [Debug,Info,Warning,Error,Critical].
-- **Services**: The services must be set precisely, the numbers (the keys) must correspond to the indices of the
-  leaderboard order, starting from the left, so the leftmost service will be 0.
-    - **Example**: If the order is service-1, service-2, service-3 in the config are {"0":"service-1","1":"service-2","
-      2":"
-      service-3"}
-- **Target**: The target is the university you want to track, and it must match the name on the leaderboard.
+- **Target**: The target is the university you want to track, and it must match the name on the leaderboard (**the name
+  should actually be the one in the url when clicking to see the details of a team**).
 - **Reload**: How often is the leaderboard reloaded, I recommend using 120 because it is the seconds of a single tick
 - **Report**: whether or not to save a statistical report in the A/D (this parameter can also be activated via line
   argument with the -r flag)
