@@ -120,7 +120,7 @@ class Test:
         logging.info(f'Running test')
 
         # self.generate_data(num_teams=len(teams_name), num_records_per_team=len(services_name), ticks=240)
-        self.manager.generate_statistic()
+        self.manager.generate_plots()
         self.manager.generate_report()
         # self.db.remove_db()
         logging.info(f'Test ended')
