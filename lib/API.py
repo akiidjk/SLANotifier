@@ -15,8 +15,14 @@ class API:
         Returns:
             dict: Data of the team
         """
+        request = requests.get(f"http://{self.address}/api/scoreboard/team/chart/{team}")
+        if request.status_code == 200:
+            return request.json()
 
-        return requests.get(f"http://{self.address}/api/scoreboard/team/chart/{team}").json()
+        logging.error(
+            f"Error in the request to the API for the team chart | status: {request.status_code} | Error: {request.text}")
+
+        exit(request.status_code)
 
     def get_team_table(self, team: str) -> dict:
         """Get the table of the team from the API.
@@ -28,7 +34,14 @@ class API:
             dict: Data of the team
         """
 
-        return requests.get(f"http://{self.address}/api/scoreboard/team/table/{team}").json()
+        request = requests.get(f"http://{self.address}/api/scoreboard/team/table/{team}")
+        if request.status_code == 200:
+            return request.json()
+
+        logging.error(
+            f"Error in the request to the API for the team table | status: {request.status_code} | Error: {request.text}")
+
+        exit(request.status_code)
 
     def get_global_chart(self, round_number: int) -> dict:
         """Get the chart of the global scoreboard from the API.
@@ -39,7 +52,14 @@ class API:
         Returns:
             dict: Data of the global scoreboard
         """
-        return requests.get(f"http://{self.address}/api/scoreboard/chart/{round_number}").json()
+        request = requests.get(f"http://{self.address}/api/scoreboard/chart/{round_number}")
+        if request.status_code == 200:
+            return request.json()
+
+        logging.error(
+            f"Error in the request to the API for the chart  | status: {request.status_code} | Error: {request.text}")
+
+        exit(request.status_code)
 
     def get_global_table(self, round_number: int) -> dict:
         """Get the table of the global scoreboard from the API.
@@ -50,7 +70,14 @@ class API:
             dict: Data of the global scoreboard
         """
 
-        return requests.get(f"http://{self.address}/api/scoreboard/table/{round_number}").json()
+        request = requests.get(f"http://{self.address}/api/scoreboard/table/{round_number}")
+        if request.status_code == 200:
+            return request.json()
+
+        logging.error(
+            f"Error in the request to the API for the chart  | status: {request.status_code} | Error: {request.text}")
+
+        exit(request.status_code)
 
     def get_score_team(self, team: str, services: list) -> list[int]:
         """Get the score of the team in the services.
