@@ -29,3 +29,4 @@ class DBManager:
         with sqlite3.connect(self.name_db) as conn:
             c = conn.cursor()
             c.execute(f'''DROP TABLE {name_table}''')
+

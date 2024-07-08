@@ -135,7 +135,7 @@ class StatisticManager:
 
     @staticmethod
     def generate_score_service_section(team: str) -> str:
-        return f"""      
+        return f"""     
 ### Score Service
 
 ![plot_score]({os.path.join("/", "reports", "plots_image", f"plot-{team}-team_services_score.png")})
@@ -273,7 +273,7 @@ class StatisticManager:
         """
 
         team_data = self.api.get_score_team(team=team, services=self.services)
-
+        
         self.max_score[team], self.min_score[team] = max(team_data), min(team_data)
 
         fig = self.create_plot(data=team_data, team=team, label="Score")
@@ -382,5 +382,6 @@ class StatisticManager:
         plt.grid(True)
 
         self.format_label(f'Score trend for Team {team}')
+
 
         return fig
