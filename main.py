@@ -18,38 +18,38 @@ class SLANotifier:
         self.target_team = target_team
         self.create_report = create_report
 
-        self.downtime_count = 0
-        self.exec_counter = 20
+        self.exec_counter = 0
 
+        self.downtime_count = {team: 0 for team in target_team}
         self.notified = {team: False for team in target_team}
         self.services = []
 
         self.api = API()
 
     @staticmethod
-    def notify(name_service: str, team_name: str) -> None:
+    def notify(name_service: str, team: str) -> None:
         """Notify the user that a service is down
         Args:
             name_service: str: Name of the service
-            team_name: str: Name of the team
+            team: str: Name of the team
 
         Returns:
             None
         """
         notification.notify(
             title='Alert',
-            message=f'The service: {name_service} is down for target {team_name} | {datetime.now().strftime("%H:%M:%S")}',
+            message=f'The service: {name_service} is down for target {team} | {datetime.now().strftime("%H:%M:%S")}',
             timeout=10
         )
         logging.info(
-            f'Notification sent for service {name_service} in team {team_name}.')
+            f'Notification sent for service {name_service} in team {team}.')
 
-    def check_notify(self, services_status: list, team_name: str) -> None:
+    def check_notify(self, services_status: list, team: str) -> None:
         """Check the status of the services and notify if some service is down
 
         Args:
             services_status: list: List of the status of the services
-            team_name:str: Name of the team
+            team:str: Name of the team
 
         Returns:
             None
@@ -63,18 +63,18 @@ class SLANotifier:
             if service['exitCode'] != 101:
                 service_down = True
                 down_services.append(service['name_service'])
-                self.downtime_count += 1
+                self.downtime_count[team] += 1
                 logging.warning(
                     f"Service {service['name_service']} is down | {service['stdout']} | {service['action']} | {service['exitCode']}")
 
-                if not self.notified[team_name]:
-                    self.notify(name_service=service['name_service'], team_name=team_name)
+                if not self.notified[team]:
+                    self.notify(name_service=service['name_service'], team=team)
 
         if service_down:
-            self.notified[team_name] = True
+            self.notified[team] = True
             logging.warning(f"Some service are down: {down_services}")
         else:
-            self.notified[team_name] = False
+            self.notified[team] = False
             logging.info(f'All service are UP.')
         logging.debug(f"{self.notified}")
         logging.info("Control ended!")
@@ -107,7 +107,7 @@ class SLANotifier:
 
         return status_report
 
-    def run(self, repeat_after: int) -> tuple[int, list[Any]]:
+    def run(self, repeat_after: int) -> tuple[dict[str | Any, int], list[Any]]:
         """Main method for start the execution of the script
 
         Args:
@@ -150,8 +150,8 @@ if __name__ == '__main__':
 
     try:
         notification.notify(
-            title='SLA Notifier: Sistema di Notifica',
-            message='Questo è un test del sistema di notifica SLA. Verifica che le notifiche siano visibili e funzionanti correttamente.',
+            title='SLA Notifier: Notification system',
+            message='This is a test of the SLA notification system. It verifies that the notifications are visible and functioning correctly.',
             timeout=15
         )
     except Exception as e:

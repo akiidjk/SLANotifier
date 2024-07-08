@@ -11,7 +11,7 @@ from lib.API import API
 
 
 class StatisticManager:
-    def __init__(self, teams_name: list, downtime_count: int, services: list):
+    def __init__(self, teams_name: list, downtime_count: dict[str, int], services: list):
         self.teams = teams_name
         self.downtime_count = downtime_count
         self.services = services
@@ -120,7 +120,7 @@ class StatisticManager:
 - **Min sla:** {self.format_results(self.min_sla, team)}
 - **Max score for service:** {self.format_results(self.max_score_service, team)}
 - **Min score for service:** {self.format_results(self.min_score_service, team)}
-- **Numbers of downtime:** {self.downtime_count}
+- **Numbers of downtime:** {self.downtime_count[team]}
 """
 
     @staticmethod
@@ -273,7 +273,7 @@ class StatisticManager:
         """
 
         team_data = self.api.get_score_team(team=team, services=self.services)
-        
+
         self.max_score[team], self.min_score[team] = max(team_data), min(team_data)
 
         fig = self.create_plot(data=team_data, team=team, label="Score")
@@ -382,6 +382,5 @@ class StatisticManager:
         plt.grid(True)
 
         self.format_label(f'Score trend for Team {team}')
-
 
         return fig
