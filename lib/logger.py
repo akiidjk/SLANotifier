@@ -6,7 +6,7 @@ from colorama import Fore, Style, init
 from lib.utils import get_config
 
 
-# ---- This file make the preset for Log ----
+# ---- This file makes the preset for Log ----
 
 class CustomFormatter(logging.Formatter):
     """Custom Formatter class to format the output of logger in a nice way!
